@@ -1,0 +1,1084 @@
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Controller/AuthController.java
+================================================================================
+
+package com.example.TicketBooking.Controller;
+
+import com.example.TicketBooking.Dto.AuthResponse;
+import com.example.TicketBooking.Dto.LoginRequest;
+import com.example.TicketBooking.Dto.RegisterRequest;
+import com.example.TicketBooking.Service.AuthService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+    private final AuthService authService;
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+    @PostMapping("/register")
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
+    }
+    @PostMapping("/login")
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request);
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Controller/EventController.java
+================================================================================
+
+package com.example.TicketBooking.Controller;
+
+import com.example.TicketBooking.Dto.EventRequest;
+import com.example.TicketBooking.Dto.EventResponse;
+import com.example.TicketBooking.Service.EventService;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import java.net.URI;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/events")
+public class EventController {
+    private final EventService eventService;
+    public EventController(EventService eventService) {
+        this.eventService = eventService;
+    }
+    @PostMapping
+    public ResponseEntity<EventResponse> createEvent(@Valid @RequestBody EventRequest request) {
+        EventResponse created = eventService.createEvent(request);
+        URI location = ServletUriComponentsBuilder.fromCurrentRequest()
+                .path("/{id}")
+                .buildAndExpand(created.id())
+                .toUri();
+        return ResponseEntity.created(location).body(created); // 201 + Location header
+    }
+    @GetMapping
+    public List<EventResponse> getAllEvents() {
+        return eventService.getAllEvents();
+    }
+    @GetMapping("/{id}")
+    public EventResponse getEvent(@PathVariable Long id) {
+        return eventService.getEvent(id);
+    }
+    @PutMapping("/{id}")
+    public EventResponse updateEvent(@PathVariable Long id, @Valid @RequestBody EventRequest request) {
+        return eventService.updateEvent(id, request);
+    }
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
+        eventService.deleteEvent(id);
+        return ResponseEntity.noContent().build(); // 204
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Dto/AuthResponse.java
+================================================================================
+
+package com.example.TicketBooking.Dto;
+import com.example.TicketBooking.Entity.Role;
+
+public record AuthResponse(String token, String tokenType, String email, String name, Role role
+) {}
+
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Dto/EventRequest.java
+================================================================================
+
+package com.example.TicketBooking.Dto;
+
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+public record EventRequest(
+        @NotBlank(message = "title is required")
+        @Size(max = 255, message = "title must be at most 255 characters")
+        String title,
+
+        @Size(max = 2000, message = "description must be at most 2000 characters")
+        String description,
+
+        @NotBlank(message = "category is required")
+        @Size(max = 100, message = "category must be at most 100 characters")
+        String category,
+
+        @NotBlank(message = "venueName is required")
+        @Size(max = 255, message = "venueName must be at most 255 characters")
+        String venueName,
+
+        @NotBlank(message = "city is required")
+        @Size(max = 100, message = "city must be at most 100 characters")
+        String city,
+
+        @NotNull(message = "startTime is required")
+        LocalDateTime startTime,
+
+        @NotNull(message = "endTime is required")
+        LocalDateTime endTime,
+
+        @NotNull(message = "basePrice is required")
+        @DecimalMin(value = "0.00", message = "basePrice must not be negative")
+        @Digits(integer = 8, fraction = 2, message = "basePrice must have at most 8 digits and 2 decimals")
+        BigDecimal basePrice,
+
+        @NotNull(message = "seatCapacity is required")
+        @Min(value = 1, message = "seatCapacity must be at least 1")
+        Integer seatCapacity
+) {
+
+    // Cross-field rule. Reported under the key "endAfterStart".
+    @AssertTrue(message = "endTime must be after startTime")
+    public boolean isEndAfterStart() {
+        if (startTime == null || endTime == null) {
+            return true; // the @NotNull checks already report the missing field
+        }
+        return endTime.isAfter(startTime);
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Dto/EventResponse.java
+================================================================================
+
+package com.example.TicketBooking.Dto;
+import com.example.TicketBooking.Entity.Event;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+public record EventResponse(
+        Long id,
+        String title,
+        String description,
+        String category,
+        String venueName,
+        String city,
+        LocalDateTime startTime,
+        LocalDateTime endTime,
+        BigDecimal basePrice,
+        int seatCapacity,
+        Instant createdAt
+) {
+
+    public static EventResponse from(Event event) {
+        return new EventResponse(
+                event.getId(),
+                event.getTitle(),
+                event.getDescription(),
+                event.getCategory(),
+                event.getVenueName(),
+                event.getCity(),
+                event.getStartTime(),
+                event.getEndTime(),
+                event.getBasePrice(),
+                event.getSeatCapacity(),
+                event.getCreatedAt()
+        );
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Dto/LoginRequest.java
+================================================================================
+
+package com.example.TicketBooking.Dto;
+
+import jakarta.validation.constraints.NotBlank;
+
+public record LoginRequest(
+        @NotBlank(message = "email is required")
+        String email,
+
+        @NotBlank(message = "password is required")
+        String password
+) {}
+
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Dto/RegisterRequest.java
+================================================================================
+
+package com.example.TicketBooking.Dto;
+
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+public record RegisterRequest(
+        @NotBlank(message = "name is required")
+        @Size(max = 100, message = "name must be at most 100 characters")
+        String name,
+        @NotBlank(message = "email is required")
+        @Email(message = "email must be a valid email address")
+        @Size(max = 255, message = "email must be at most 255 characters")
+        String email,
+        // BCrypt only uses the first 72 bytes, so longer passwords are rejected.
+        @NotBlank(message = "password is required")
+        @Size(min = 8, max = 72, message = "password must be between 8 and 72 characters")
+        String password
+) {}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Entity/Event.java
+================================================================================
+
+package com.example.TicketBooking.Entity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "events")
+public class Event {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Column(length = 2000)
+    private String description;
+
+    @Column(nullable = false, length = 100)
+    private String category;
+
+    @Column(name = "venue_name", nullable = false)
+    private String venueName;
+
+    @Column(nullable = false, length = 100)
+    private String city;
+
+    @Column(name = "start_time", nullable = false)
+    private LocalDateTime startTime;
+
+    @Column(name = "end_time", nullable = false)
+    private LocalDateTime endTime;
+
+    @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
+    private BigDecimal basePrice;
+
+    @Column(name = "seat_capacity", nullable = false)
+    private int seatCapacity;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+    public Event() {
+    }
+
+    public Event(String title, String description, String category, String venueName, String city,
+                 LocalDateTime startTime, LocalDateTime endTime, BigDecimal basePrice, int seatCapacity) {
+        this.title = title;
+        this.description = description;
+        this.category = category;
+        this.venueName = venueName;
+        this.city = city;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.basePrice = basePrice;
+        this.seatCapacity = seatCapacity;
+    }
+
+    @PrePersist
+    void onCreate() {
+        this.createdAt = Instant.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getVenueName() {
+        return venueName;
+    }
+
+    public void setVenueName(String venueName) {
+        this.venueName = venueName;
+    }
+
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
+    }
+
+    public LocalDateTime getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(LocalDateTime startTime) {
+        this.startTime = startTime;
+    }
+
+    public LocalDateTime getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(LocalDateTime endTime) {
+        this.endTime = endTime;
+    }
+
+    public BigDecimal getBasePrice() {
+        return basePrice;
+    }
+
+    public void setBasePrice(BigDecimal basePrice) {
+        this.basePrice = basePrice;
+    }
+
+    public int getSeatCapacity() {
+        return seatCapacity;
+    }
+
+    public void setSeatCapacity(int seatCapacity) {
+        this.seatCapacity = seatCapacity;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Entity/Role.java
+================================================================================
+
+package com.example.TicketBooking.Entity;
+
+public enum Role {
+    USER,
+    ADMIN
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Entity/User.java
+================================================================================
+
+package com.example.TicketBooking.Entity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+
+import java.time.Instant;
+
+@Entity
+@Table(name = "users", uniqueConstraints = @UniqueConstraint(name = "uk_users_email", columnNames = "email"))
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false, length = 100)
+    private String name;
+
+    // The database enforces that two users can never share an email.
+    @Column(nullable = false)
+    private String email;
+
+    @Column(name = "password_hash", nullable = false, length = 100)
+    private String passwordHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Role role;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    // JPA needs a no-argument constructor.
+    public User() {
+    }
+
+    public User(String name, String email, String passwordHash, Role role) {
+        this.name = name;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.role = role;
+    }
+
+    @PrePersist
+    void onCreate() {
+        this.createdAt = Instant.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public String getPasswordHash() {
+        return passwordHash;
+    }
+
+    public Role getRole() {
+        return role;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Exception/EmailAlreadyExistsException.java
+================================================================================
+
+package com.example.TicketBooking.Exception;
+
+public class EmailAlreadyExistsException extends RuntimeException {
+
+    public EmailAlreadyExistsException() {
+        super("Email is already registered");
+    }
+}
+
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Exception/GlobalExceptionHandler.java
+================================================================================
+
+package com.example.TicketBooking.Exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ProblemDetail handleNotFound(ResourceNotFoundException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    // Registering an email that already exists.
+    @ExceptionHandler(EmailAlreadyExistsException.class)
+    public ProblemDetail handleEmailExists(EmailAlreadyExistsException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    // Wrong email or password at login.
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentials(InvalidCredentialsException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
+    // Thrown when @Valid fails on a request body.
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        ex.getBindingResult().getFieldErrors()
+                .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Validation failed");
+        problem.setProperty("errors", errors);
+        return problem;
+    }
+
+    // Broken JSON, or a value of the wrong type (for example a bad date format).
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Request body is missing, malformed, or contains an invalid value");
+    }
+
+    // For example GET /api/events/abc where an id was expected.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "Invalid value for parameter '" + ex.getName() + "'");
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Exception/InvalidCredentialsException.java
+================================================================================
+
+package com.example.TicketBooking.Exception;
+
+public class InvalidCredentialsException extends RuntimeException {
+
+    public InvalidCredentialsException() {
+        super("Invalid email or password");
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Exception/ResourceNotFoundException.java
+================================================================================
+
+package com.example.TicketBooking.Exception;
+
+public class ResourceNotFoundException extends RuntimeException {
+
+    public ResourceNotFoundException(String message) {
+        super(message);
+    }
+}
+
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/JacksonConfig.java
+================================================================================
+
+package com.example.TicketBooking;
+
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import tools.jackson.databind.cfg.CoercionAction;
+import tools.jackson.databind.cfg.CoercionInputShape;
+import tools.jackson.databind.type.LogicalType;
+
+@Configuration
+public class JacksonConfig {
+
+    @Bean
+    JsonMapperBuilderCustomizer strictTypeCoercionCustomizer() {
+        return builder -> builder.withCoercionConfig(
+                LogicalType.Textual,
+                config -> config
+                        .setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
+                        .setCoercion(CoercionInputShape.Float, CoercionAction.Fail)
+                        .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail)
+        );
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Repository/EventRepository.java
+================================================================================
+
+package com.example.TicketBooking.Repository;
+import com.example.TicketBooking.Entity.Event;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface EventRepository extends JpaRepository<Event, Long> {
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Repository/UserRepository.java
+================================================================================
+
+package com.example.TicketBooking.Repository;
+
+import com.example.TicketBooking.Entity.User;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+
+public interface UserRepository extends JpaRepository<User, Long> {
+
+    Optional<User> findByEmail(String email);
+
+    boolean existsByEmail(String email);
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/security/CustomUserDetailsService.java
+================================================================================
+
+package com.example.TicketBooking.security;
+
+import com.example.TicketBooking.Entity.User;
+import com.example.TicketBooking.Repository.UserRepository;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+
+    private final UserRepository userRepository;
+
+    public CustomUserDetailsService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        // roles("ADMIN") becomes the authority "ROLE_ADMIN", which hasRole("ADMIN") checks.
+        return org.springframework.security.core.userdetails.User
+                .withUsername(user.getEmail())
+                .password(user.getPasswordHash())
+                .roles(user.getRole().name())
+                .build();
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/security/JwtAuthenticationFilter.java
+================================================================================
+
+package com.example.TicketBooking.security;
+
+import io.jsonwebtoken.JwtException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpHeaders;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+
+/**
+ * Runs once per request before the authorization rules. If the request carries a valid
+ * "Authorization: Bearer <token>" header, it marks the request as authenticated.
+ * Otherwise it does nothing, and the rules in SecurityConfig decide whether the request is allowed.
+ */
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final String BEARER_PREFIX = "Bearer ";
+
+    private final JwtService jwtService;
+    private final UserDetailsService userDetailsService;
+
+    public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
+        this.jwtService = jwtService;
+        this.userDetailsService = userDetailsService;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+
+        if (header != null && header.startsWith(BEARER_PREFIX)) {
+            String token = header.substring(BEARER_PREFIX.length());
+            try {
+                String email = jwtService.extractEmail(token);
+
+                if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    // The role is read from the database on every request, so a role change applies immediately.
+                    UserDetails user = userDetailsService.loadUserByUsername(email);
+
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            } catch (JwtException | IllegalArgumentException | UsernameNotFoundException ex) {
+            }
+        }
+
+        filterChain.doFilter(request, response);
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/security/JwtService.java
+================================================================================
+
+package com.example.TicketBooking.security;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import javax.crypto.SecretKey;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
+
+/**
+ * Creates and checks JWTs. A token holds the user's email (subject), the time it was issued,
+ * and an expiry time, and is signed with a secret that only this server knows.
+ */
+@Service
+public class JwtService {
+
+    private final SecretKey signingKey;
+    private final long expirationMinutes;
+
+    public JwtService(@Value("${app.jwt.secret}") String base64Secret,
+                      @Value("${app.jwt.expiration-minutes}") long expirationMinutes) {
+        // Fails at startup if the secret is not Base64 or is shorter than 32 bytes.
+        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(base64Secret));
+        this.expirationMinutes = expirationMinutes;
+    }
+
+    public String generateToken(String email) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .subject(email)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(expirationMinutes, ChronoUnit.MINUTES)))
+                .signWith(signingKey)
+                .compact();
+    }
+
+    /**
+     * Returns the email inside the token. Throws a JwtException if the token is
+     * tampered with, malformed, or expired.
+     */
+    public String extractEmail(String token) {
+        return Jwts.parser()
+                .verifyWith(signingKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/security/SecurityConfig.java
+================================================================================
+
+package com.example.TicketBooking.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   JwtService jwtService,
+                                                   UserDetailsService userDetailsService) throws Exception {
+
+        // Created here instead of with @Component so it is not also registered as a plain servlet filter.
+        JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtService, userDetailsService);
+
+        http
+                // No browser sessions or cookies are used, so CSRF protection is not needed.
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        // Spring Boot forwards errors to /error internally
+                        .requestMatchers("/error").permitAll()
+
+                        // Register and login
+                        .requestMatchers("/api/auth/**").permitAll()
+
+                        // Anyone can browse events
+                        .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/**").permitAll()
+
+                        // Only admins can create, change or delete events
+                        .requestMatchers(HttpMethod.POST, "/api/events", "/api/events/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/events", "/api/events/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/events", "/api/events/**").hasRole("ADMIN")
+
+                        // Everything else (future booking endpoints) needs a logged-in user
+                        .anyRequest().authenticated())
+                // No or invalid token on a protected endpoint -> 401 (default would be 403)
+                .exceptionHandling(handling -> handling
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}
+
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Service/AuthService.java
+================================================================================
+
+package com.example.TicketBooking.Service;
+
+import com.example.TicketBooking.Dto.AuthResponse;
+import com.example.TicketBooking.Dto.LoginRequest;
+import com.example.TicketBooking.Dto.RegisterRequest;
+import com.example.TicketBooking.Entity.Role;
+import com.example.TicketBooking.Entity.User;
+import com.example.TicketBooking.Exception.EmailAlreadyExistsException;
+import com.example.TicketBooking.Exception.InvalidCredentialsException;
+import com.example.TicketBooking.Repository.UserRepository;
+import com.example.TicketBooking.security.JwtService;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Locale;
+
+@Service
+public class AuthService {
+
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtService jwtService;
+
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtService = jwtService;
+    }
+
+    @Transactional
+    public AuthResponse register(RegisterRequest request) {
+        String email = normalizeEmail(request.email());
+        if (userRepository.existsByEmail(email)) {
+            throw new EmailAlreadyExistsException();
+        }
+        User user = new User(request.name().trim(), email, passwordEncoder.encode(request.password()), Role.USER);
+        try {
+            // saveAndFlush sends the INSERT now, so a duplicate shows up inside this try block.
+            userRepository.saveAndFlush(user);
+        } catch (DataIntegrityViolationException ex) {
+            // Two requests registered the same email at the same moment; the database stopped the second one.
+            throw new EmailAlreadyExistsException();
+        }
+        return toResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    public AuthResponse login(LoginRequest request) {
+        String email = normalizeEmail(request.email());
+        User user = userRepository.findByEmail(email).orElseThrow(InvalidCredentialsException::new);
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+        return toResponse(user);
+    }
+
+    private String normalizeEmail(String email) {
+        return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private AuthResponse toResponse(User user) {
+        String token = jwtService.generateToken(user.getEmail());
+        return new AuthResponse(token, "Bearer", user.getEmail(), user.getName(), user.getRole());
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/Service/EventService.java
+================================================================================
+
+package com.example.TicketBooking.Service;
+import com.example.TicketBooking.Dto.EventRequest;
+import com.example.TicketBooking.Dto.EventResponse;
+import com.example.TicketBooking.Entity.Event;
+import com.example.TicketBooking.Exception.ResourceNotFoundException;
+import com.example.TicketBooking.Repository.EventRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+public class EventService {
+
+    private final EventRepository eventRepository;
+
+    public EventService(EventRepository eventRepository) {
+        this.eventRepository = eventRepository;
+    }
+
+    public EventResponse createEvent(EventRequest request) {
+        Event event = new Event();
+        applyRequest(event, request);
+        return EventResponse.from(eventRepository.save(event));
+    }
+
+    @Transactional(readOnly = true)
+    public List<EventResponse> getAllEvents() {
+        return eventRepository.findAll().stream()
+                .map(EventResponse::from)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public EventResponse getEvent(Long id) {
+        return EventResponse.from(findEventOrThrow(id));
+    }
+
+    @Transactional
+    public EventResponse updateEvent(Long id, EventRequest request) {
+        Event event = findEventOrThrow(id);
+        applyRequest(event, request);
+        // No save() call needed: the entity is managed inside this transaction,
+        // so Hibernate notices the changes (dirty checking) and runs the UPDATE on commit.
+        return EventResponse.from(event);
+    }
+    @Transactional
+    public void deleteEvent(Long id) {
+        if (!eventRepository.existsById(id)) {
+            throw eventNotFound(id);
+        }
+        eventRepository.deleteById(id);
+    }
+
+    private Event findEventOrThrow(Long id) {
+        return eventRepository.findById(id).orElseThrow(() -> eventNotFound(id));
+    }
+
+    private ResourceNotFoundException eventNotFound(Long id) {
+        return new ResourceNotFoundException("Event not found with id " + id);
+    }
+
+    private void applyRequest(Event event, EventRequest request) {
+        event.setTitle(request.title());
+        event.setDescription(request.description());
+        event.setCategory(request.category());
+        event.setVenueName(request.venueName());
+        event.setCity(request.city());
+        event.setStartTime(request.startTime());
+        event.setEndTime(request.endTime());
+        event.setBasePrice(request.basePrice());
+        event.setSeatCapacity(request.seatCapacity());
+    }
+}
+
+================================================================================
+FILE: src/main/java/com/example/TicketBooking/TicketBookingApplication.java
+================================================================================
+
+package com.example.TicketBooking;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class TicketBookingApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(TicketBookingApplication.class, args);
+	}
+
+}
+
+
+================================================================================
+FILE: src/test/java/com/example/TicketBooking/TicketBookingApplicationTests.java
+================================================================================
+
+package com.example.TicketBooking;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class TicketBookingApplicationTests {
+
+	@Test
+	void contextLoads() {
+	}
+
+}
+
+

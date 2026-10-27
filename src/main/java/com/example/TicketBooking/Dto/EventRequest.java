@@ -11,7 +11,6 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 public record EventRequest(
-
         @NotBlank(message = "title is required")
         @Size(max = 255, message = "title must be at most 255 characters")
         String title,
@@ -46,12 +45,10 @@ public record EventRequest(
         @Min(value = 1, message = "seatCapacity must be at least 1")
         Integer seatCapacity
 ) {
-
-    // Cross-field rule. Reported under the key "endAfterStart".
     @AssertTrue(message = "endTime must be after startTime")
     public boolean isEndAfterStart() {
         if (startTime == null || endTime == null) {
-            return true; // the @NotNull checks already report the missing field
+            return true;
         }
         return endTime.isAfter(startTime);
     }

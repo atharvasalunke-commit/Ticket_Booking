@@ -40,10 +40,9 @@ public class EventService {
     public EventResponse updateEvent(Long id, EventRequest request) {
         Event event = findEventOrThrow(id);
         applyRequest(event, request);
-        // No save() call needed: the entity is managed inside this transaction,
-        // so Hibernate notices the changes (dirty checking) and runs the UPDATE on commit.
         return EventResponse.from(event);
     }
+    @Transactional
     public void deleteEvent(Long id) {
         if (!eventRepository.existsById(id)) {
             throw eventNotFound(id);
